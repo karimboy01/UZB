@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Student Housing — Найди квартиру</title>
+  <style>
+    :root{--accent:#ff7a18;--bg:#f6f7fb;--card:#ffffff;--muted:#666}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;background:var(--bg);color:#111}
+    header{background:linear-gradient(90deg,var(--accent),#ffb07a);padding:18px;color:#fff}
+    .container{max-width:1000px;margin:20px auto;padding:0 16px}
+    h1{margin:0;font-size:22px}
+    .top{display:flex;gap:12px;align-items:center;justify-content:space-between}
+    .controls{display:flex;gap:8px;align-items:center}
+    input, select{padding:10px;border-radius:8px;border:1px solid #e4e7ef;background:#fff;min-width:140px}
+    button{background:var(--accent);color:#fff;border:none;padding:10px 14px;border-radius:8px;cursor:pointer}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:18px}
+    .card{background:var(--card);border-radius:12px;box-shadow:0 6px 18px rgba(12,18,36,0.06);overflow:hidden;display:flex;flex-direction:column}
+    .card img{width:100%;height:160px;object-fit:cover}
+    .card-body{padding:12px;flex:1;display:flex;flex-direction:column}
+    .meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .price{font-weight:700}
+    .muted{color:var(--muted);font-size:13px}
+    .desc{flex:1;margin-bottom:12px;color:#222}
+    .actions{display:flex;gap:8px}
+    .secondary{background:#eef1f6;color:#111;border:1px solid #e1e6ef}
+    .favorite{margin-left:auto}
+    footer{margin:40px 0;text-align:center;color:var(--muted)}
+    /* modal */
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.45)}
+    .modal.open{display:flex}
+    .modal-card{background:#fff;border-radius:12px;max-width:700px;width:94%;overflow:hidden}
+    .modal-card .content{display:flex;gap:12px}
+    .modal-card img{width:45%;height:240px;object-fit:cover}
+    .modal-card .info{padding:16px}
+    @media(max-width:700px){.modal-card .content{flex-direction:column}.modal-card img{width:100%;height:200px}}
+    /* small helpers */
+    .pill{background:#f3f3f3;padding:6px 8px;border-radius:999px;font-size:13px}
+    .no-results{padding:40px;text-align:center;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container top">
+      <div>
+        <h1>Student Housing — найдите жильё для учёбы</h1>
+        <div style="font-size:13px;opacity:.95">Поиск комнат и квартир рядом с университетами — быстро и просто</div>
+      </div>
+      <div class="pill">Для студентов — бесплатное использование</div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <div class="controls">
+        <input id="queryCity" placeholder="Город или район" />
+        <input id="maxPrice" type="number" placeholder="Макс. цена (UAH)" />
+        <select id="roomType">
+          <option value="any">Все типы</option>
+          <option value="studio">Студия</option>
+          <option value="1br">1 комн.</option>
+          <option value="2br">2 комн.</option>
+        </select>
+        <button id="searchBtn">Найти</button>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button id="showFavorites" class="secondary">Показать избранное</button>
+        <button id="resetBtn" class="secondary">Сброс</button>
+      </div>
+    </div>
+
+    <section id="results" class="grid" aria-live="polite"></section>
+    <div id="noResults" class="no-results" style="display:none">Мы не нашли ничего по вашему запросу. Попробуйте упростить фильтры.</div>
+
+    <footer>
+      <div>Сделано для студентов • Демо-версия. Хотите добавить регистрацию или карту — скажите!</div>
+    </footer>
+  </main>
+
+  <!-- modal for details -->
+  <div id="modal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="content">
+        <img id="modalImg" src="" alt="Фото квартиры" />
+        <div class="info">
+          <h3 id="modalTitle">Заголовок</h3>
+          <div class="muted" id="modalMeta">Город • Цена • Тип</div>
+          <p id="modalDesc" style="margin-top:10px">Описание...</p>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <a id="contactLink" class="pill" href="#">Написать хозяину</a>
+            <button id="modalSave" class="secondary">Сохранить</button>
+            <button id="modalClose" style="margin-left:auto">Закрыть</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+
+const apartments = [
+  { id:1, title:'Уютная 1-ком рядом с вузом', city:'Ташкент', price:150000, type:'1br', beds:2,
+    img:'image.png',
+    desc:'Светлая квартира, 10 минут пешком до университета. Рядом магазины и автобусная остановка.',
+    email:'owner1@example.com' },
+
+  { id:2, title:'Студия в центре', city:'Ташкент', price:90000, type:'studio', beds:1,
+    img:'image copy 2.png',
+    desc:'Компактная студия для одного-двух студентов. Есть стиралка и мебель.',
+    email:'owner2@example.com' },
+
+  { id:3, title:'2-комнатная квартира, можно с соседом', city:'Самарканд', price:120000, type:'2br', beds:3,
+    img:'image copy 3.png',
+    desc:'Большая квартира, можно снимать по комнате. Светлая кухня и большой балкон.',
+    email:'owner3@example.com' },
+
+
+  { id:4, title:'Уютная 1-ком рядом с вузом', city:'Ташкент', price:150000, type:'1br', beds:2,
+    img:'image copy 4.png',
+    desc:'Светлая квартира, 10 минут пешком до университета. Рядом магазины и автобусная остановка.',
+    email:'owner1@example.com' },
+
+  { id:5, title:'Студия в центре', city:'Ташкент', price:90000, type:'studio', beds:1,
+    img:'image copy 5.png',
+    desc:'Компактная студия для одного-двух студентов. Есть стиралка и мебель.',
+    email:'owner2@example.com' },
+
+  { id:6, title:'2-комнатная квартира, можно с соседом', city:'Самарканд', price:120000, type:'2br', beds:3,
+    img:'image copy 6.png',
+    desc:'Большая квартира, можно снимать по комнате. Светлая кухня и большой балкон.',
+    email:'owner3@example.com' },
+
+     { id:7, title:'Уютная 1-ком рядом с вузом', city:'Ташкент', price:150000, type:'1br', beds:2,
+    img:'image copy 7.png',
+    desc:'Светлая квартира, 10 минут пешком до университета. Рядом магазины и автобусная остановка.',
+    email:'owner1@example.com' },
+
+  { id:8, title:'Студия в центре', city:'Ташкент', price:90000, type:'studio', beds:1,
+    img:'image copy 8.png',
+    desc:'Компактная студия для одного-двух студентов. Есть стиралка и мебель.',
+    email:'owner2@example.com' },
+
+  { id:9, title:'2-комнатная квартира, можно с соседом', city:'Самарканд', price:120000, type:'2br', beds:3,
+    img:'image copy 9.png',
+    desc:'Большая квартира, можно снимать по комнате. Светлая кухня и большой балкон.',
+    email:'owner3@example.com' },
+
+   { id:10, title:'Уютная 1-ком рядом с вузом', city:'Ташкент', price:150000, type:'1br', beds:2,
+    img:'image copy 10.png',
+    desc:'Светлая квартира, 10 минут пешком до университета. Рядом магазины и автобусная остановка.',
+    email:'owner1@example.com' },
+
+  { id:11, title:'Студия в центре', city:'Ташкент', price:90000, type:'studio', beds:1,
+    img:'image copy 11.png',
+    desc:'Компактная студия для одного-двух студентов. Есть стиралка и мебель.',
+    email:'owner2@example.com' },
+
+  { id:12, title:'2-комнатная квартира, можно с соседом', city:'Самарканд', price:120000, type:'2br', beds:3,
+    img:'image copy 12.png',
+    desc:'Большая квартира, можно снимать по комнате. Светлая кухня и большой балкон.',
+    email:'owner3@example.com' },
+
+   { id:13, title:'Уютная 1-ком рядом с вузом', city:'Ташкент', price:150000, type:'1br', beds:2,
+    img:'image copy 13.png',
+    desc:'Светлая квартира, 10 минут пешком до университета. Рядом магазины и автобусная остановка.',
+    email:'owner1@example.com' },
+
+  { id:14, title:'Студия в центре', city:'Ташкент', price:90000, type:'studio', beds:1,
+    img:'image copy 14.png',
+    desc:'Компактная студия для одного-двух студентов. Есть стиралка и мебель.',
+    email:'owner2@example.com' },
+
+  { id:15, title:'2-комнатная квартира, можно с соседом', city:'Самарканд', price:120000, type:'2br', beds:3,
+    img:'image copy 15.png',
+    desc:'Большая квартира, можно снимать по комнате. Светлая кухня и большой балкон.',
+    email:'owner3@example.com' },
+
+   { id:16, title:'Уютная 1-ком рядом с вузом', city:'Ташкент', price:150000, type:'1br', beds:2,
+    img:'image copy 16.png',
+    desc:'Светлая квартира, 10 минут пешком до университета. Рядом магазины и автобусная остановка.',
+    email:'owner1@example.com' },
+
+  { id:17, title:'Студия в центре', city:'Ташкент', price:90000, type:'studio', beds:1,
+    img:'image copy 17.png',
+    desc:'Компактная студия для одного-двух студентов. Есть стиралка и мебель.',
+    email:'owner2@example.com' },
+
+  { id:18, title:'2-комнатная квартира, можно с соседом', city:'Самарканд', price:120000, type:'2br', beds:3,
+    img:'image copy 18.png',
+    desc:'Большая квартира, можно снимать по комнате. Светлая кухня и большой балкон.',
+    email:'owner3@example.com' },
+
+  
+  
+];
+
+
+    // DOM refs
+    const resultsEl = document.getElementById('results');
+    const noResultsEl = document.getElementById('noResults');
+    const queryCityEl = document.getElementById('queryCity');
+    const maxPriceEl = document.getElementById('maxPrice');
+    const roomTypeEl = document.getElementById('roomType');
+    const searchBtn = document.getElementById('searchBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const showFavoritesBtn = document.getElementById('showFavorites');
+
+    const modal = document.getElementById('modal');
+    const modalImg = document.getElementById('modalImg');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalMeta = document.getElementById('modalMeta');
+    const modalDesc = document.getElementById('modalDesc');
+    const contactLink = document.getElementById('contactLink');
+    const modalSave = document.getElementById('modalSave');
+    const modalClose = document.getElementById('modalClose');
+
+    // favorites stored in localStorage
+    function getFavorites(){
+      try{ return JSON.parse(localStorage.getItem('favApts')||'[]') }catch(e){return[]}
+    }
+    function saveFavorites(arr){ localStorage.setItem('favApts', JSON.stringify(arr)) }
+    function isFavorited(id){ return getFavorites().includes(id) }
+    function toggleFavorite(id){ const fav = getFavorites(); if(fav.includes(id)){ saveFavorites(fav.filter(x=>x!==id)) } else { fav.push(id); saveFavorites(fav) } renderList(currentList) }
+
+    // render
+    let currentList = apartments.slice();
+    function renderList(list){
+      resultsEl.innerHTML = '';
+      if(!list.length){ noResultsEl.style.display='block'; return }
+      noResultsEl.style.display='none';
+      list.forEach(a=>{
+        const card = document.createElement('article'); card.className='card';
+        card.innerHTML = `
+          <img src="${a.img}" alt="${a.title}">
+          <div class="card-body">
+            <div class="meta"><div><strong>${a.title}</strong><div class="muted">${a.city} • ${a.beds} места</div></div><div class="price">${a.price} сум</div></div>
+            <div class="desc">${a.desc}</div>
+            <div class="actions">
+              <button class="secondary" data-id="${a.id}" data-action="view">Подробнее</button>
+              <a class="pill" href="mailto:${a.email}?subject=Интерес%20по%20жилью:%20${encodeURIComponent(a.title)}">Связаться</a>
+              <button class="pill favorite" data-id="${a.id}" data-action="fav">${isFavorited(a.id)?'❤ Сохранено':'♡ Сохранить'}</button>
+            </div>
+          </div>
+        `;
+        resultsEl.appendChild(card);
+      })
+    }
+
+    // filtering
+    function applyFilters(){
+      const q = queryCityEl.value.trim().toLowerCase();
+      const maxP = Number(maxPriceEl.value) || Infinity;
+      const type = roomTypeEl.value;
+      let filtered = apartments.filter(a=>{
+        if(q && !(`${a.city} ${a.title}`.toLowerCase().includes(q))) return false;
+        if(a.price > maxP) return false;
+        if(type!=='any' && a.type!==type) return false;
+        return true;
+      });
+      currentList = filtered;
+      renderList(filtered);
+    }
+
+    // click handlers (delegation)
+    resultsEl.addEventListener('click', e=>{
+      const btn = e.target.closest('button');
+      if(!btn) return;
+      const id = Number(btn.dataset.id);
+      const action = btn.dataset.action;
+      if(action==='view') openModal(id);
+      if(action==='fav') toggleFavorite(id);
+    });
+
+    searchBtn.addEventListener('click', applyFilters);
+    queryCityEl.addEventListener('keydown', e=>{ if(e.key==='Enter') applyFilters() });
+    resetBtn.addEventListener('click', ()=>{ queryCityEl.value=''; maxPriceEl.value=''; roomTypeEl.value='any'; currentList = apartments.slice(); renderList(currentList) });
+
+    showFavoritesBtn.addEventListener('click', ()=>{
+      const fav = getFavorites();
+      const list = apartments.filter(a=>fav.includes(a.id));
+      currentList = list;
+      renderList(list);
+    });
+
+    // modal
+    function openModal(id){
+      const a = apartments.find(x=>x.id===id); if(!a) return;
+      modalImg.src = a.img; modalTitle.textContent = a.title; modalMeta.textContent = `${a.city} • ${a.price} сум • ${a.type}`; modalDesc.textContent = a.desc; contactLink.href = `mailto:${a.email}?subject=Интерес%20по%20жилью:%20${encodeURIComponent(a.title)}`;
+      modalSave.dataset.id = id; modal.classList.add('open');
+    }
+    modalClose.addEventListener('click', ()=> modal.classList.remove('open'));
+    modal.addEventListener('click', e=>{ if(e.target===modal) modal.classList.remove('open') });
+    modalSave.addEventListener('click', ()=>{ const id = Number(modalSave.dataset.id); toggleFavorite(id); modal.classList.remove('open') });
+
+    // initial render
+    renderList(apartments);
+  </script>
+</body>
+</html>
